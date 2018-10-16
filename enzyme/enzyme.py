@@ -9,6 +9,7 @@ To view a copy of this license, visit <http://opensource.org/licenses/MIT/>.
 '''
 import sys
 from xml.dom.minidom import parse
+from synbiochem.utils.seq_utils import write_fasta
 
 
 def main(args):
@@ -18,15 +19,13 @@ def main(args):
 
     dom = parse(args[1])
 
-    hits = [[hit.attributes['ac'].value,
-             hit.getElementsByTagName('querySeq')[0].firstChild.nodeValue,
-             hit.getElementsByTagName('pattern')[0].firstChild.nodeValue,
-             hit.getElementsByTagName('matchSeq')[0].firstChild.nodeValue]
-            for hit in dom.getElementsByTagName('hit')
-            if hit.attributes['ac'].value in acs]
+    id_seqs = {hit.attributes['ac'].value:
+               hit.getElementsByTagName('matchSeq')[
+        0].firstChild.nodeValue.replace('-', '')
+        for hit in dom.getElementsByTagName('hit')
+        if hit.attributes['ac'].value in acs}
 
-    for hit in hits:
-        print '\n'.join(hit[1:]) + '\n'
+    write_fasta(id_seqs, 'ac_seqs.fasta')
 
 
 if __name__ == '__main__':
