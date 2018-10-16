@@ -31,36 +31,17 @@
 # pylint: disable=too-many-branches
 # pylint: disable=too-many-locals
 # pylint: disable=too-many-statements
-import argparse
-from collections import defaultdict
-import csv
 import random
 import sys
 
 from ete3 import Tree
-from joblib import Parallel, delayed
 
 
-def restricted_float(x):
-    '''restricted_float.'''
-    x = float(x)
-    if x < 0.0 or x > 1.0:
-        raise argparse.ArgumentTypeError('%r not in range [0.0, 1.0]' % (x,))
-    return x
-
-
-def find_neighbours(_, leaf, counter, verbose=True):
+def find_neighbours(leaf):
     '''Find neighbours of leaf.'''
     dlist = {}
     parent = leaf.up
     flag = 0
-
-    if verbose:
-        print 'leaf findN at ieration:	' + str(counter)
-        print leaf
-        print 'parent findN at ieration:	' + str(counter)
-        print parent
-        print parent.get_children()
 
     sister_flag = 0
     # this for loop start from parent and climb up max two nodes, if it finds
@@ -69,24 +50,17 @@ def find_neighbours(_, leaf, counter, verbose=True):
         if parent.is_root():
             flag = 1
             break
-        if verbose == 3:
-            print 'children	' + str(n)
-            print parent.children[n]
 
         if parent.children[n].is_leaf():  # search at one node of distance
             if parent.children[n] != leaf:
                 DIS = leaf.get_distance(parent.children[n])
                 dlist.update({leaf.name + ',' + parent.children[n].name: DIS})
                 flag = flag + 1
-                if verbose:
-                    print leaf.name + ',' + parent.children[n].name + \
-                        str(DIS) + 'have one node of distance'
         else:
             if flag == 0:
-                if verbose:  # going up, search at two nodes of distance
-                    print 'going up, brother is node'
 
                 temp_dlist = {}
+
                 for nn in range(0, len(parent.children[n].get_children())):
                     if parent.children[n].children[nn].is_leaf():
                         DIS = leaf.get_distance(
@@ -97,21 +71,14 @@ def find_neighbours(_, leaf, counter, verbose=True):
 
     # collect results at two nodes of distance only if there are no leaves
     # that are closer
-    if ((sister_flag == 1) and (flag == 0)):
+    if (sister_flag == 1) and (flag == 0):
         dlist.update(temp_dlist)
-        if verbose:
-            print str(temp_dlist) + \
-                ' are not sister taxa, but neighbours first is leaf, second is upper neighbor'
 
     if flag == 0:  # this means that the leaf has no neighbors at one node of dist
         # therefore I climb the tree down towards the root of one more step and
         # look for leaves
         parent = parent.up
         multi_flag = 0
-        if verbose:
-            print 'going down'
-            print 'gran parent'
-            print parent
         temp_dlist = {}
         # this for loop start from gran parent and climb up max one nodes, if
         # it finds leaves calculate the distances,
@@ -125,535 +92,108 @@ def find_neighbours(_, leaf, counter, verbose=True):
                     {leaf.name + ',' + parent.children[n].name: DIS})
         if multi_flag == 1:					# this is to deal with polytomies
             dlist.update(temp_dlist)
-            if verbose == 3:
-                print leaf.name + ',' + parent.children[n].name + \
-                    str(DIS) + ' are not sister taxa, but neighbours ' + \
-                    'first is leaf, second is neighbor of downstair ' + \
-                    '(towards root)'
 
     return dlist
 
 
-def check_protected(leaf_to_prune, dict_meta, list_meta_count,
-                    dict_meta_count, meta_count, verbose=False):
-    '''check_protected.'''
-    if verbose > 1:
-        print 'checking ' + str(leaf_to_prune)
-    warning = 0
-    # loop thru all the tags of the selected leaf
-    for tag in dict_meta[leaf_to_prune]:
-        tag_counter = 0
-
-        for _, v in dict_meta.items():  # loop thru all the leaves,tag
-            flag = 0
-            for value in v:
-                if str(value) == str(tag):  # count the leaves with the tag
-                    flag = 1
-            # if the leaf has several time the same tag (mistake in input) it
-            # counts only one
-            if flag == 1:
-                tag_counter = tag_counter + 1
-        if verbose:
-            print str(leaf_to_prune) + ' ' + str(tag) + ' ' + str(tag_counter)
-        if list_meta_count:						# if -lmc option
-            if tag_counter <= int(dict_meta_count[tag]):
-                warning = 1
-        else:
-            if meta_count:				# if -mc option
-                if int(tag_counter) <= int(meta_count):
-                    warning = 1
-        if verbose:
-            print 'warning = ' + str(warning)
-    return warning
-
-
-def find_leaf_to_prune(dlist, t, leaves_pair, list_meta, dict_meta,
-                       list_meta_count,
-                       dict_meta_count,
-                       meta_count, verbose=False):
+def find_leaf_to_prune(dlist, t, keep_longest=True):
     '''parse the list with all neighbor pairs and distances, find the closest
     pair and select the leaf.'''
-    warning = 1
-    while warning != 0:
-        if not dlist:
-            leaf_to_prune = 'stop,'
-            break
-        min_val = min(dlist.itervalues())
-        d_min = {}
+    if not dlist:
+        return 'stop,'
 
-        for k, v in dlist.iteritems():
-            if v == min_val:
-                d_min.update({k: v})
+    min_val = min(dlist.itervalues())
+    d_min = {}
 
-        pair_unsplit = str(random.choice(list(d_min)))
-        pair = pair_unsplit.split(',')
-        leaf1 = t.search_nodes(name=pair[0])[0]
-        leaf2 = t.search_nodes(name=pair[1])[0]
+    for k, v in dlist.iteritems():
+        if v == min_val:
+            d_min.update({k: v})
 
-        if leaf1.dist > leaf2.dist:
-            if leaves_pair == 1:
-                leaf_to_prune = leaf2.name
-                leaf_to_keep = leaf1.name
-            if leaves_pair == 0:
-                leaf_to_prune = leaf1.name
-                leaf_to_keep = leaf2.name
+    pair_unsplit = str(random.choice(list(d_min)))
+    pair = pair_unsplit.split(',')
 
-        if leaf1.dist < leaf2.dist:
-            if leaves_pair == 1:
-                leaf_to_prune = leaf1.name
-                leaf_to_keep = leaf2.name
-            if leaves_pair == 0:
-                leaf_to_prune = leaf2.name
-                leaf_to_keep = leaf1.name
+    leaf1 = t.search_nodes(name=pair[0])[0]
+    leaf2 = t.search_nodes(name=pair[1])[0]
 
-        if (leaf1.dist == leaf2.dist) or (leaves_pair == 2):
-            # this select the leaf at random within the couple
-            leaf_to_prune = random.choice(list(pair))
-            for leaf in pair:
-                if leaf != leaf_to_prune:
-                    leaf_to_keep = leaf
-
-        if verbose:
-            print 'leaf_to_check  ' + str(leaf_to_prune)
-
-        # check if leaf is protected
-        if list_meta and dict_meta[leaf_to_prune]:
-            warning = check_protected(leaf_to_prune, dict_meta,
-                                      list_meta_count,
-                                      dict_meta_count,
-                                      meta_count, verbose)
-
-            if warning == 1:
-
-                if verbose:
-                    print ' checking the neighbour'
-                    print 'leaf_to_check ' + str(leaf_to_keep)
-                # if leaf is protected I check the sister
-                warning = check_protected(leaf_to_prune, dict_meta,
-                                          list_meta_count,
-                                          dict_meta_count,
-                                          meta_count, verbose)
-                if warning == 0:
-                    leaf_to_prune = leaf_to_keep
-
+    if leaf1.dist > leaf2.dist:
+        if keep_longest:
+            leaf_to_prune = leaf2.name
+            # leaf_to_keep = leaf1.name
         else:
-            warning = 0
-        if warning == 1:
-            # if both leaves of the pair are protected => delete the pair from
-            # dlist and make another cycle
-            del dlist[pair_unsplit]
+            leaf_to_prune = leaf1.name
+            # leaf_to_keep = leaf2.name
+    elif leaf1.dist <= leaf2.dist:
+        if keep_longest:
+            leaf_to_prune = leaf1.name
+            # leaf_to_keep = leaf2.name
+        else:
+            leaf_to_prune = leaf2.name
+            # leaf_to_keep = leaf1.name
+
+    # check if leaf is protected
+    # if is_protected
+        # leaf_to_prune = leaf_to_keep
+        # if both leaves of the pair are protected => delete the pair from
+        # dlist and make another cycle
+        # del dlist[pair_unsplit]
 
     return leaf_to_prune
 
 
-def prune_t(leaf_to_prune, tree):
+def prune_tree(leaf_to_prune, tree):
     '''Prune leaf from tree.'''
-    G = tree.search_nodes(name=leaf_to_prune)[0]
-    parent = G.up
+    node = tree.search_nodes(name=leaf_to_prune)[0]
+    parent = node.up
 
     if len(parent.get_children()) == 2:
-
-        if parent.children[0] != G:
+        if parent.children[0] != node:
             parent.children[0].dist = parent.children[0].dist + parent.dist
-
-        if parent.children[1] != G:
+        elif parent.children[1] != node:
             parent.children[1].dist = parent.children[1].dist + parent.dist
 
-    G.detach()
+    node.detach()
 
     if len(parent.get_children()) == 1:
         # after pruning the remaining branch will be like this:
         # ---/---leaf_name. I delete useless node keeping the b length
         parent.delete()
 
-    return tree
-
-
-def calculate_TL(t):
-    '''Calculate tree length.'''
-    tree_length = 0
-
-    for n in t.traverse():
-        tree_length += n.dist
-
-    return tree_length
-
-
-def prune_dist_matrix(dlist, leaf_to_prune):
-    '''Prune leaf from matrix.'''
-    key_del = []
-    for k, _ in dlist.iteritems():
-
-        (one, two) = k.split(',')
-        if ((one == leaf_to_prune) or (two == leaf_to_prune)):
-            key_del.append(k)
-
-    for KK in key_del:
-        del dlist[KK]
-    return dlist
-
-
-def parallel_loop(i, leaves, t, cpu, DLIST, counter):
-    '''Parallel loop.'''
-    n = i
-    while n < len(leaves):
-        N_list = find_neighbours(t, leaves[n], counter)
-        n += cpu  # n of threads
-        if N_list:
-            DLIST.update(N_list)
-    return DLIST
-
-
-def write_stop(t, output1, output2):
-    '''Write output with stop option.'''
-    F = open(output1, 'w')
-    F.write(t.write())
-    F.close()
-    leaves = t.get_leaves()
-    list_names = []
-    for leaf in leaves:
-        list_names.append(leaf.name)
-    F = open(output2, 'w')
-    F.write('\n'.join(list_names))
-    F.close()
-
-
-def read_list_meta(path_to_list_meta):
-    '''Read list leaf_name, tag.'''
-    dict_meta = defaultdict(list)
-
-    with open(path_to_list_meta, 'rb') as f:
-        reader = csv.reader(f)
-        list_meta = list(reader)
-
-    list_meta = filter(None, list_meta)
-
-    for taxa_name, tag in list_meta:
-        dict_meta[taxa_name].append(tag)
-
-    return dict_meta
-
-
-def read_list_tags(path_to_list_tag):
-    '''Read list tags.'''
-    dict_tag = defaultdict(list)
-    with open(path_to_list_tag, 'rb') as f:
-        reader = csv.reader(f)
-        list_tag = list(reader)
-    list_tag = filter(None, list_tag)
-
-    for tag, count in list_tag:
-        dict_tag[tag] = count
-
-    return dict_tag
-
-
-def select_clade(tip1, tip2, t, INFILE):
-    '''Select clade.'''
-    ancestor = t.get_common_ancestor(tip1, tip2)
-    write_stop(ancestor, INFILE + '_subtree',
-               INFILE + '_subtree_leaves_list')
-
-    sys.exit(0)
-
-
-def select_all(t, INFILE):
-    '''Select all.'''
-    temp = []
-    all_leaves = t.get_leaves()
-
-    for all_leaf in all_leaves:
-        temp.append(all_leaf.name)
-
-    fle = open(INFILE + '_leaf_names_all', 'w')
-    fle.write('\n'.join(temp))
-    fle.close()
-
-    sys.exit(0)
-
 
 def main(args):
     '''main method.'''
-    if ((args.stop_at_RTL > 0) and (args.stop_at_X_leaves > 0)):
-        raise argparse.ArgumentTypeError(
-            '-X and -RTL are mutually exclusive options')
+    t = Tree(args[0], format=1)
+    # t.resolve_polytomy()
+    #  t.get_common_ancestor(n1, n2)
+    # len(t)
 
-    # SOFTWARE STARTS
-
-    t = Tree(args.INFILE, format=1)
-
-    if args.solve_polytomies:
-        t.resolve_polytomy()
-
-    # select clade routine
-    if (args.select_clade_1) and (args.select_clade_2):
-        select_clade(args.select_clade_1, args.select_clade_2, t, args.INFILE)
-
-    if args.select_all:  # select all routine
-        select_all(t, args.INFILE)
-
-    if args.list_meta:
-        dict_meta = read_list_meta(args.list_meta)
-
-    if args.list_meta_count:
-        dict_meta_count = read_list_tags(args.list_meta_count)
-
-    print 'N of taxa in tree is : ' + str(len(t))
-
-    if args.solve_polytomies:
-        print '\nPolytomies will be solved at random'
-    else:
-        print '\nPolytomies will be kept'
-
-    if args.stop_at_X_leaves:
-        print '\nTreemmer will reduce the tree to ' + \
-            str(args.stop_at_X_leaves) + ' leaves'
-    elif args.stop_at_RTL:
-        print '\nTreemmer will reduce the tree to ' + \
-            str(args.stop_at_RTL) + ' of the original tree length'
-    else:
-        print '\nTreemmer will calculate the tree length decay'
-
-    if args.list_meta:
-        print '\nsome leaves are protected by the -lm options and ' + \
-            'will not be pruned based on what specified with -mc or -lmc'
-
-    print '\nTreemmer will prune ' + str(args.resolution) + ' leaves at each iteration'
-    print '\nTreemmer will use ' + str(args.cpu) + ' cpu(s)'
-
-    x = []
-    y = []
-    counter = 0
-    output = []
-    stop = 0
-    TOT_TL = calculate_TL(t)
-    ori_length = len(t)
-    # append first point to the output with RTL = 1 (before starting pruning)#
-    output.append('1    ' + str(len(t)))
-    x.append(ori_length)
-    y.append(1)
-    leaves = t.get_leaves()
-    leaf_names = []
-    leaf_to_p = ''
-
-    # update the dictionary of taxa_names with tags, only taxa in the tree
-    # stays are kept in the dict
-    if args.list_meta:
-        for leaf in leaves:
-            leaf_names.append(leaf.name)
-        dict_meta_new = {key: dict_meta[key] for key in leaf_names}
-        dict_meta = dict_meta_new
-
-    while len(t) > 3:
-        counter = counter + 1
+    while len(t) > max(3, int(args[1])):
         leaves = t.get_leaves()
-        DLIST = {}
 
-        print '\niter        ' + str(counter)
-
-        DLIST = Parallel(n_jobs=args.cpu)(delayed(parallel_loop)(i) for i in range(
-            0, args.cpu))  # loop all leaves and find neighbours, report pairs and distances
+        # loop all leaves and find neighbours, report pairs and distances
         result = {}
 
-        # when running in parallel DLIST is a dict of dicts, this for loop merge
-        # them all in one
-        for d in DLIST:
-            result.update(d)
+        for leaf in leaves:
+            neighbours = find_neighbours(leaf)
 
-        DLIST = result
+            if neighbours:
+                result.update(neighbours)
 
-        print DLIST
+        # find leaf to prune, protections (from -lm option) are embedded in
+        # the function
+        (leaf_to_p) = find_leaf_to_prune(result, t)
 
-        # resolution loop (find leaf to prune, prune it, update matrix r times)
-        for r in range(1, args.resolution + 1):
+        if leaf_to_p != 'stop,':
+            prune_tree(leaf_to_p, t)  # do the tree pruning
 
-            if args.list_meta:
-                if not DLIST and len(t) > 4:
-                    leaf_to_p = 'stop,'
+            # purge the distance list of all pairs that have the pruned leaf
+            for key in [key for key in result if leaf_to_p in key.split(',')]:
+                del result[key]
 
-            if leaf_to_p != 'stop,':
-                if (len(DLIST) < 1) or (len(t) < 4):
-                    break
-
-            # find leaf to prune, protections (from -lm option) are embedded in
-            # the function
-            (leaf_to_p) = find_leaf_to_prune(DLIST, t, args.leaves_pair,
-                                             args.list_meta, dict_meta,
-                                             args.list_meta_count,
-                                             dict_meta_count,
-                                             args.meta_count)
-
-            if leaf_to_p == 'stop,':
-                # if r > 1 some taxa might have been no considered because
-                # surrounded by already pruned leaves
-                if r == 1:
-                    print 'WARNING: all remaining leaves are protected ' + \
-                        'by the -lm option, outputting the results at current ' + \
-                        'iteration'
-                if r > 1:
-                    leaf_to_p = ''
-                    # if r > 1 make another cycle recalculating distances
-                    # and maybe find some more leaves to prune
-                    break
-
-            if leaf_to_p != 'stop,':
-
-                leaf_to_prune = t.search_nodes(name=leaf_to_p)[0]
-                t = prune_t(leaf_to_p, t)  # do the tree pruning
-
-                # update the dictionary of taxa_names with tags, only taxa in the
-                # tree are kept in the dict
-                if args.list_meta:
-                    leaves = t.get_leaves()
-                    leaf_names = []
-                    for leaf in leaves:
-                        leaf_names.append(leaf.name)
-                    dict_meta_new = {key: dict_meta[key] for key in leaf_names}
-                    dict_meta = dict_meta_new
-
-                TL = calculate_TL(t)
-                # purge the distance list of all pairs that have the pruned
-                # leaf
-                DLIST = prune_dist_matrix(DLIST, leaf_to_p)
-                rel_TL = TL / TOT_TL
-
-            #################################          OUTPUT         #########
-
-            # plot point in rtld after every leaf independently of -r
-            if (args.fine_plot) and (leaf_to_p != 'stop,'):
-                output.append(str(rel_TL) + '    ' + str(len(t)))
-                length = len(t)
-                x.append(length)
-                y.append(rel_TL)
-
-            # if stop criterium is met (X) ==> output
-            if args.stop_at_X_leaves:
-                if (args.stop_at_X_leaves >= len(t)) or (leaf_to_p == 'stop,'):
-                    output1 = args.INFILE + '_trimmed_tree_X_' + \
-                        str(args.stop_at_X_leaves)
-                    output2 = args.INFILE + '_trimmed_list_X_' + \
-                        str(args.stop_at_X_leaves)
-                    write_stop(t, output1, output2)
-                    stop = 1
-                    break
-
-            # if stop criterium is met (RTL) ==> output
-            if args.stop_at_RTL:
-                if (args.stop_at_RTL >= rel_TL) or (leaf_to_p == 'stop,'):
-                    output1 = args.INFILE + '_trimmed_tree_RTL_' + \
-                        str(args.stop_at_RTL)
-                    output2 = args.INFILE + '_trimmed_list_RTL_' + \
-                        str(args.stop_at_RTL)
-                    write_stop(t, output1, output2)
-                    stop = 1
-                    break
-
-            if leaf_to_p == 'stop,':
-                break
-
-            print '\n ITERATION RESOLUTION:    ' + str(r)
-            print 'leaf to prune:\n' + str(leaf_to_p) + '    ' + str(leaf_to_prune.dist)
-            print '\n new tree'
-            print t
-            print '\nRTL :    ' + str(rel_TL) + ' N_seq:    ' + str(len(t))
-            print '\nnew matrix\n'
-            print DLIST
-
-        if stop == 1:
-            print '\nRTL :    ' + str(rel_TL) + ' N_seq:    ' + str(len(t))
+        else:
             break
 
-        if leaf_to_p == 'stop,':
-            print '\nRTL :    ' + str(rel_TL) + ' N_seq:    ' + str(len(t))
-            break
-
-        if not args.fine_plot:  # normal plot (with -fp = FALSE)
-            output.append(str(rel_TL) + '    ' + str(len(t)))
-            length = len(t)
-            x.append(length)
-            y.append(rel_TL)
-
-        print '\nRTL :    ' + str(rel_TL) + ' N_seq:    ' + str(len(t))
-
-    if ((stop == 0) or (args.plot_always)):  # create file for plot of rltd
-        F = open(args.INFILE + '_res_' +
-                 str(args.resolution) + '_LD', 'w')
-        F.write('\n'.join(output))
+    print t
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument('INFILE', type=str, help='path to the newick tree')
-    parser.add_argument('-X', '--stop_at_X_leaves', metavar='0-n_leaves',
-                        default='0',
-                        help='stop pruning when the number of leaves =  X',
-                        type=int, nargs='?')
-    parser.add_argument('-RTL', '--stop_at_RTL', metavar='0-1', default='0',
-                        help='stop pruning when the relative tree length falls below RTL',
-                        type=restricted_float, nargs='?')
-    parser.add_argument('-r', '--resolution', metavar='INT', default=1,
-                        help='number of leaves to prune at each iteration (default: 1)',
-                        type=int, nargs='?')
-    parser.add_argument('-p', '--solve_polytomies',
-                        help='resolve polytomies at random (default: FALSE)',
-                        action='store_true', default=False)
-    parser.add_argument('-lp', '--leaves_pair', metavar='0,1,2', default=2,
-                        help='After the pair of leaves with the smallest ' +
-                        'distance is dentified Treemmer prunes: 0: the ' +
-                        'longest leaf\n1: the shortest leaf\n2: random ' +
-                        'choice (default: 2)', type=int, nargs='?')
-    parser.add_argument('-fp', '--fine_plot', help='when --resolution > 1, ' +
-                        'plot RTL vs n leaves every time a leaf is pruned  ' +
-                        '(default: FALSE => plot every X leaves (X = -r))',
-                        action='store_true', default=False)
-    parser.add_argument('-c', '--cpu', metavar='INT', default=1,
-                        help='number of cpu to use (default: 1)', type=int,
-                        nargs='?')
-    parser.add_argument('-lm', '--list_meta', metavar='path/to/file',
-                        default='',
-                        help='path to file with metainformation. Format ' +
-                        'for each line: \'leaf_name,tag\'. Leaves can ' +
-                        'appear mutiple times with different tags, or not ' +
-                        'appear at all', type=str, nargs='?')
-    parser.add_argument('-mc', '--meta_count', metavar='INT', default='0',
-                        help='if the -lm option is active -mc defines ' +
-                        'the minimum number of leaves that will be kept ' +
-                        'for each category defined in the metainformation ' +
-                        'file (default = 0)', type=int, nargs='?')
-    parser.add_argument('-lmc', '--list_meta_count', metavar='path/to/file',
-                        default='',
-                        help='path to file. Format for each line: ' +
-                        '\'tag,number\', this option is alternative to ' +
-                        '-mc and allows to specify the different minimum ' +
-                        'number of leaves that shuld be retained for ' +
-                        'different categories', type=str, nargs='?')
-    parser.add_argument('-sc1', '--select_clade_1', metavar='leaf_name',
-                        default='',
-                        help='use together with -sc2. Treemmer will ' +
-                        'identify the smallest monophyletic clade including ' +
-                        'two specified leaves and output a list of leaves ' +
-                        'belonging to this clade. This can be usefull to ' +
-                        'prepare the --list_meta input file in case you ' +
-                        'want to prune only leaves belonging (or not ' +
-                        'belonging) to a certain clade', type=str, nargs='?')
-    parser.add_argument('-sc2', '--select_clade_2', metavar='leaf_name',
-                        default='',
-                        help='use together with -sc1. Treemmer will ' +
-                        'identify the smallest monophyletic clade ' +
-                        'including two specified leaves and output a ' +
-                        'list of leaves belonging to this clade. This ' +
-                        'can be useful to prepare the --list_meta input ' +
-                        'file in case you want to prune only leaves ' +
-                        'belonging (or not belonging) to a certain clade',
-                        type=str, nargs='?')
-    parser.add_argument('-sa', '--select_all', default=False,
-                        help='output the list of leaf names in the input ' +
-                        'tree and exit',
-                        action='store_true')
-    parser.add_argument('-pa', '--plot_always', default=False,
-                        help='output the RTL plot and file also with ' +
-                        '-X and -RTL options',
-                        action='store_true')
-
-    main(parser.parse_args())
+    main(sys.argv[1:])
