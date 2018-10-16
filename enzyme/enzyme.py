@@ -9,6 +9,7 @@ To view a copy of this license, visit <http://opensource.org/licenses/MIT/>.
 '''
 import sys
 from xml.dom.minidom import parse
+
 from synbiochem.utils.seq_utils import write_fasta
 
 
