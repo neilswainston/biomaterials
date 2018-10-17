@@ -80,7 +80,7 @@ def _prune_tree(leaf):
 def main(args):
     '''main method.'''
     tree = Tree(args[0], format=1)
-    sub_tree = prune(tree, int(args[1]), bool(args[2]), args[3:])
+    sub_tree = prune(tree, int(args[1]), args[2] != 'False', args[3:])
     print sub_tree
 
 
