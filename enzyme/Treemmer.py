@@ -37,7 +37,28 @@ import sys
 from ete3 import Tree
 
 
-def find_neighbours(leaf):
+def prune(tree, num_nodes):
+    '''Prune tree to representative number of nodes.'''
+    while len(tree) > max(3, num_nodes):
+        neighbours = {}
+
+        for leaf in tree.get_leaves():
+            neighbours.update(_get_neighbours(leaf))
+
+        (prune_leaf) = _get_prune_leaf(neighbours, tree)
+
+        if prune_leaf != 'stop,':
+            prune_tree(prune_leaf, tree)  # do the tree pruning
+
+            # purge the distance list of all pairs that have the pruned leaf
+            for key in [key for key in neighbours
+                        if prune_leaf in key.split(',')]:
+                del neighbours[key]
+        else:
+            break
+
+
+def _get_neighbours(leaf):
     '''Find neighbours of leaf.'''
     dlist = {}
     parent = leaf.up
@@ -66,7 +87,8 @@ def find_neighbours(leaf):
                         DIS = leaf.get_distance(
                             parent.children[n].children[nn])
                         temp_dlist.update(
-                            {leaf.name + ',' + parent.children[n].children[nn].name: DIS})
+                            {leaf.name + ',' +
+                             parent.children[n].children[nn].name: DIS})
                         sister_flag = sister_flag + 1
 
     # collect results at two nodes of distance only if there are no leaves
@@ -74,7 +96,8 @@ def find_neighbours(leaf):
     if (sister_flag == 1) and (flag == 0):
         dlist.update(temp_dlist)
 
-    if flag == 0:  # this means that the leaf has no neighbors at one node of dist
+    if flag == 0:
+        # this means that the leaf has no neighbors at one node of dist
         # therefore I climb the tree down towards the root of one more step and
         # look for leaves
         parent = parent.up
@@ -96,7 +119,7 @@ def find_neighbours(leaf):
     return dlist
 
 
-def find_leaf_to_prune(dlist, t, keep_longest=True):
+def _get_prune_leaf(dlist, t, keep_longest=True):
     '''parse the list with all neighbor pairs and distances, find the closest
     pair and select the leaf.'''
     if not dlist:
@@ -161,38 +184,13 @@ def prune_tree(leaf_to_prune, tree):
 
 def main(args):
     '''main method.'''
-    t = Tree(args[0], format=1)
+    tree = Tree(args[0], format=1)
     # t.resolve_polytomy()
     #  t.get_common_ancestor(n1, n2)
     # len(t)
+    prune(tree, int(args[1]))
 
-    while len(t) > max(3, int(args[1])):
-        leaves = t.get_leaves()
-
-        # loop all leaves and find neighbours, report pairs and distances
-        result = {}
-
-        for leaf in leaves:
-            neighbours = find_neighbours(leaf)
-
-            if neighbours:
-                result.update(neighbours)
-
-        # find leaf to prune, protections (from -lm option) are embedded in
-        # the function
-        (leaf_to_p) = find_leaf_to_prune(result, t)
-
-        if leaf_to_p != 'stop,':
-            prune_tree(leaf_to_p, t)  # do the tree pruning
-
-            # purge the distance list of all pairs that have the pruned leaf
-            for key in [key for key in result if leaf_to_p in key.split(',')]:
-                del result[key]
-
-        else:
-            break
-
-    print t
+    print tree
 
 
 if __name__ == '__main__':
