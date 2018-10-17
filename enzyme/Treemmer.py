@@ -46,17 +46,14 @@ def prune(tree, num_nodes):
         for leaf in tree.get_leaves():
             neighbours.update(_get_neighbours(leaf))
 
-        (prune_leaf) = _get_prune_leaf(neighbours, tree)
+        prune_leaf = _get_prune_leaf(neighbours, tree)
 
-        if prune_leaf != 'stop,':
-            prune_tree(prune_leaf, tree)  # do the tree pruning
+        _prune_tree(prune_leaf, tree)
 
-            # Purge the distance list of all pairs that have the pruned leaf:
-            for key in [key for key in neighbours
-                        if prune_leaf in key.split(',')]:
-                del neighbours[key]
-        else:
-            break
+        # Purge the distance list of all pairs that have the pruned leaf:
+        for key in [key for key in neighbours
+                    if prune_leaf in key.split(',')]:
+            del neighbours[key]
 
 
 def _get_neighbours(leaf):
@@ -68,7 +65,7 @@ def _get_neighbours(leaf):
     sister_flag = 0
 
     if parent.is_root():
-        flag = 1
+        return neighbours
     else:
         # this for loop start from parent and climb up max two nodes,
         # if it finds leaves calculate the distances
@@ -81,7 +78,6 @@ def _get_neighbours(leaf):
                     flag = flag + 1
             else:
                 if flag == 0:
-
                     temp_dlist = {}
 
                     for nn in range(0, len(parent.children[n].get_children())):
@@ -121,12 +117,9 @@ def _get_neighbours(leaf):
     return neighbours
 
 
-def _get_prune_leaf(neighbours, t, keep_longest=True):
+def _get_prune_leaf(neighbours, t):
     '''parse the list with all neighbor pairs and distances, find the closest
     pair and select the leaf.'''
-    if not neighbours:
-        return 'stop,'
-
     min_val = min(neighbours.itervalues())
     d_min = {}
 
@@ -141,19 +134,11 @@ def _get_prune_leaf(neighbours, t, keep_longest=True):
     leaf2 = t.search_nodes(name=pair[1])[0]
 
     if leaf1.dist > leaf2.dist:
-        if keep_longest:
-            leaf_to_prune = leaf2.name
-            # leaf_to_keep = leaf1.name
-        else:
-            leaf_to_prune = leaf1.name
-            # leaf_to_keep = leaf2.name
-    elif leaf1.dist <= leaf2.dist:
-        if keep_longest:
-            leaf_to_prune = leaf1.name
-            # leaf_to_keep = leaf2.name
-        else:
-            leaf_to_prune = leaf2.name
-            # leaf_to_keep = leaf1.name
+        leaf_to_prune = leaf2.name
+        # leaf_to_keep = leaf1.name
+    else:
+        leaf_to_prune = leaf1.name
+        # leaf_to_keep = leaf2.name
 
     # check if leaf is protected
     # if is_protected
@@ -165,7 +150,7 @@ def _get_prune_leaf(neighbours, t, keep_longest=True):
     return leaf_to_prune
 
 
-def prune_tree(leaf_to_prune, tree):
+def _prune_tree(leaf_to_prune, tree):
     '''Prune leaf from tree.'''
     node = tree.search_nodes(name=leaf_to_prune)[0]
     parent = node.up
