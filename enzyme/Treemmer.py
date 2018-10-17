@@ -30,6 +30,7 @@
 # pylint: disable=too-many-arguments
 # pylint: disable=too-many-branches
 # pylint: disable=too-many-locals
+# pylint: disable=too-many-nested-blocks
 # pylint: disable=too-many-statements
 import random
 import sys
@@ -50,7 +51,7 @@ def prune(tree, num_nodes):
         if prune_leaf != 'stop,':
             prune_tree(prune_leaf, tree)  # do the tree pruning
 
-            # purge the distance list of all pairs that have the pruned leaf
+            # Purge the distance list of all pairs that have the pruned leaf:
             for key in [key for key in neighbours
                         if prune_leaf in key.split(',')]:
                 del neighbours[key]
@@ -60,41 +61,42 @@ def prune(tree, num_nodes):
 
 def _get_neighbours(leaf):
     '''Find neighbours of leaf.'''
-    dlist = {}
+    neighbours = {}
     parent = leaf.up
     flag = 0
 
     sister_flag = 0
-    # this for loop start from parent and climb up max two nodes, if it finds
-    # leaves calculate the distances,
-    for n in range(0, len(parent.get_children())):
-        if parent.is_root():
-            flag = 1
-            break
 
-        if parent.children[n].is_leaf():  # search at one node of distance
-            if parent.children[n] != leaf:
-                DIS = leaf.get_distance(parent.children[n])
-                dlist.update({leaf.name + ',' + parent.children[n].name: DIS})
-                flag = flag + 1
-        else:
-            if flag == 0:
+    if parent.is_root():
+        flag = 1
+    else:
+        # this for loop start from parent and climb up max two nodes,
+        # if it finds leaves calculate the distances
+        for n in range(0, len(parent.get_children())):
+            if parent.children[n].is_leaf():  # search at one node of distance
+                if parent.children[n] != leaf:
+                    DIS = leaf.get_distance(parent.children[n])
+                    neighbours.update(
+                        {leaf.name + ',' + parent.children[n].name: DIS})
+                    flag = flag + 1
+            else:
+                if flag == 0:
 
-                temp_dlist = {}
+                    temp_dlist = {}
 
-                for nn in range(0, len(parent.children[n].get_children())):
-                    if parent.children[n].children[nn].is_leaf():
-                        DIS = leaf.get_distance(
-                            parent.children[n].children[nn])
-                        temp_dlist.update(
-                            {leaf.name + ',' +
-                             parent.children[n].children[nn].name: DIS})
-                        sister_flag = sister_flag + 1
+                    for nn in range(0, len(parent.children[n].get_children())):
+                        if parent.children[n].children[nn].is_leaf():
+                            DIS = leaf.get_distance(
+                                parent.children[n].children[nn])
+                            temp_dlist.update(
+                                {leaf.name + ',' +
+                                 parent.children[n].children[nn].name: DIS})
+                            sister_flag = sister_flag + 1
 
     # collect results at two nodes of distance only if there are no leaves
     # that are closer
     if (sister_flag == 1) and (flag == 0):
-        dlist.update(temp_dlist)
+        neighbours.update(temp_dlist)
 
     if flag == 0:
         # this means that the leaf has no neighbors at one node of dist
@@ -114,21 +116,21 @@ def _get_neighbours(leaf):
                 temp_dlist.update(
                     {leaf.name + ',' + parent.children[n].name: DIS})
         if multi_flag == 1:					# this is to deal with polytomies
-            dlist.update(temp_dlist)
+            neighbours.update(temp_dlist)
 
-    return dlist
+    return neighbours
 
 
-def _get_prune_leaf(dlist, t, keep_longest=True):
+def _get_prune_leaf(neighbours, t, keep_longest=True):
     '''parse the list with all neighbor pairs and distances, find the closest
     pair and select the leaf.'''
-    if not dlist:
+    if not neighbours:
         return 'stop,'
 
-    min_val = min(dlist.itervalues())
+    min_val = min(neighbours.itervalues())
     d_min = {}
 
-    for k, v in dlist.iteritems():
+    for k, v in neighbours.iteritems():
         if v == min_val:
             d_min.update({k: v})
 
@@ -157,8 +159,8 @@ def _get_prune_leaf(dlist, t, keep_longest=True):
     # if is_protected
         # leaf_to_prune = leaf_to_keep
         # if both leaves of the pair are protected => delete the pair from
-        # dlist and make another cycle
-        # del dlist[pair_unsplit]
+        # neighbours and make another cycle
+        # del neighbours[pair_unsplit]
 
     return leaf_to_prune
 
