@@ -22,10 +22,11 @@ def prune(tree, num_nodes):
     for pair in combinations(tree.get_leaves(), r=2):
         dists[pair[0]][pair[1]] = pair[0].get_distance(pair[1])
 
-    while len(tree) > max(3, num_nodes):
+    while len(tree) > max(1, num_nodes):
         leaf1 = dists.min(axis=0).idxmin()
         leaf2 = dists.min(axis=1).idxmin()
-        prune_leaf = leaf2 if leaf2.dist > leaf2.dist else leaf1
+        prune_leaf = leaf2 if leaf1.dist > leaf2.dist else leaf1
+        dists.drop(prune_leaf, axis=0, inplace=True)
         dists.drop(prune_leaf, axis=1, inplace=True)
 
         _prune_tree(prune_leaf)
