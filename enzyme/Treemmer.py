@@ -32,7 +32,7 @@
 # pylint: disable=too-many-locals
 # pylint: disable=too-many-nested-blocks
 # pylint: disable=too-many-statements
-# from itertools import combinations
+from itertools import combinations
 import operator
 import sys
 
@@ -41,59 +41,18 @@ from ete3 import Tree
 
 def prune(tree, num_nodes):
     '''Prune tree to representative number of nodes.'''
-    while len(tree) > max(3, num_nodes):
-        neighbours = []
-
-        # for pair in combinations(tree.get_leaves(), r=2):
-        #    neighbours.append([pair, pair[0].get_distance(pair[1])])
-
-        for leaf in tree.get_leaves():
-            neighbours.extend(_get_neighbours(leaf))
-
-        prune_leaf = _get_prune_leaf(neighbours)
-        _prune_tree(prune_leaf)
-
-
-def _get_neighbours(leaf):
-    '''Find neighbours of leaf.'''
     neighbours = []
-    parent = leaf.up
-    flag = False
 
-    if parent.is_root():
-        return neighbours
-    else:
-        # this for loop start from parent and climb up max two nodes,
-        # if it finds leaves calculate the distances
-        for child in parent.get_children():
-            # search at one node of distance
-            if child.is_leaf():
-                if child != leaf:
-                    dis = leaf.get_distance(child)
-                    neighbours.append([leaf, child, dis])
-                    flag = True
-            elif not flag:
-                for grandchild in child.get_children():
-                    if grandchild.is_leaf():
-                        dis = leaf.get_distance(grandchild)
-                        neighbours.append([leaf, grandchild, dis])
+    for pair in combinations(tree.get_leaves(), r=2):
+        neighbours.append([pair[0], pair[1], pair[0].get_distance(pair[1])])
 
-    if not flag:
-        # this means that the leaf has no neighbors at one node of dist
-        # therefore I climb the tree down towards the root of one more step and
-        # look for leaves
-        parent = parent.up
+    while len(tree) > max(3, num_nodes):
+        prune_leaf = _get_prune_leaf(neighbours)
 
-        # this for loop start from gran parent and climb up max one nodes, if
-        # it finds leaves calculate the distances,
-        for n in range(0, len(parent.get_children())):
-            if parent.is_root():
-                break
-            if parent.children[n].is_leaf():
-                dis = leaf.get_distance(parent.children[n])
-                neighbours.append([leaf, parent.children[n], dis])
+        neighbours = [neighbour for neighbour in neighbours
+                      if prune_leaf not in neighbour]
 
-    return neighbours
+        _prune_tree(prune_leaf)
 
 
 def _get_prune_leaf(neighbours):
