@@ -14,22 +14,31 @@ from ete3 import Tree
 import pandas as pd
 
 
-def prune(tree, num_nodes):
+def prune(tree, num_nodes, keep=None):
     '''Prune tree to representative number of nodes.'''
-    dists = pd.DataFrame(index=tree.get_leaves(),
-                         columns=tree.get_leaves())
+    if keep is None:
+        keep = []
 
-    for pair in combinations(tree.get_leaves(), r=2):
+    # Filter leaves to only consider those "deleteable":
+    leaves = [leaf for leaf in tree.get_leaves() if leaf.name not in keep]
+
+    # Form distance matrix:
+    dists = pd.DataFrame(index=leaves, columns=leaves)
+
+    for pair in combinations(leaves, r=2):
         dists[pair[0]][pair[1]] = pair[0].get_distance(pair[1])
 
+    # Iterate through distance matrix, deleting most redundant leaf:
     while len(tree) > max(1, num_nodes):
+        # Find most redundant leaf and delete:
         leaf1 = dists.min(axis=0).idxmin()
         leaf2 = dists.min(axis=1).idxmin()
         prune_leaf = leaf2 if leaf1.dist > leaf2.dist else leaf1
+        _prune_tree(prune_leaf)
+
+        # Update distance matrix:
         dists.drop(prune_leaf, axis=0, inplace=True)
         dists.drop(prune_leaf, axis=1, inplace=True)
-
-        _prune_tree(prune_leaf)
 
 
 def _prune_tree(leaf):
@@ -50,7 +59,7 @@ def main(args):
     # t.resolve_polytomy()
     #  t.get_common_ancestor(n1, n2)
     # len(t)
-    prune(tree, int(args[1]))
+    prune(tree, int(args[1]), args[2:])
 
     print tree
 
