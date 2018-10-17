@@ -32,7 +32,8 @@
 # pylint: disable=too-many-locals
 # pylint: disable=too-many-nested-blocks
 # pylint: disable=too-many-statements
-import random
+# from itertools import combinations
+import operator
 import sys
 
 from ete3 import Tree
@@ -41,62 +42,48 @@ from ete3 import Tree
 def prune(tree, num_nodes):
     '''Prune tree to representative number of nodes.'''
     while len(tree) > max(3, num_nodes):
-        neighbours = {}
+        neighbours = []
+
+        # for pair in combinations(tree.get_leaves(), r=2):
+        #    neighbours.append([pair, pair[0].get_distance(pair[1])])
 
         for leaf in tree.get_leaves():
-            neighbours.update(_get_neighbours(leaf))
+            neighbours.extend(_get_neighbours(leaf))
 
-        prune_leaf = _get_prune_leaf(neighbours, tree)
-
-        _prune_tree(prune_leaf, tree)
-
-        # Purge the distance list of all pairs that have the pruned leaf:
-        for key in [key for key in neighbours if prune_leaf in key]:
-            del neighbours[key]
+        prune_leaf = _get_prune_leaf(neighbours)
+        _prune_tree(prune_leaf)
 
 
 def _get_neighbours(leaf):
     '''Find neighbours of leaf.'''
-    neighbours = {}
+    neighbours = []
     parent = leaf.up
     flag = False
-    sister_flag = False
 
     if parent.is_root():
         return neighbours
     else:
         # this for loop start from parent and climb up max two nodes,
         # if it finds leaves calculate the distances
-        for n in range(0, len(parent.get_children())):
+        for child in parent.get_children():
             # search at one node of distance
-            if parent.children[n].is_leaf():
-                if parent.children[n] != leaf:
-                    dis = leaf.get_distance(parent.children[n])
-                    neighbours[(leaf.name, parent.children[n].name)] = dis
+            if child.is_leaf():
+                if child != leaf:
+                    dis = leaf.get_distance(child)
+                    neighbours.append([leaf, child, dis])
                     flag = True
             elif not flag:
-                temp_dlist = {}
-
-                for nn in range(0, len(parent.children[n].get_children())):
-                    if parent.children[n].children[nn].is_leaf():
-                        dis = leaf.get_distance(
-                            parent.children[n].children[nn])
-                        temp_dlist[(leaf.name,
-                                    parent.children[n].children[nn].name)] = dis
-                        sister_flag = True
-
-    # collect results at two nodes of distance only if there are no leaves
-    # that are closer
-    if sister_flag and not flag:
-        neighbours.update(temp_dlist)
+                for grandchild in child.get_children():
+                    if grandchild.is_leaf():
+                        dis = leaf.get_distance(grandchild)
+                        neighbours.append([leaf, grandchild, dis])
 
     if not flag:
         # this means that the leaf has no neighbors at one node of dist
         # therefore I climb the tree down towards the root of one more step and
         # look for leaves
         parent = parent.up
-        multi_flag = False
-        temp_dlist = {}
+
         # this for loop start from gran parent and climb up max one nodes, if
         # it finds leaves calculate the distances,
         for n in range(0, len(parent.get_children())):
@@ -104,64 +91,35 @@ def _get_neighbours(leaf):
                 break
             if parent.children[n].is_leaf():
                 dis = leaf.get_distance(parent.children[n])
-                multi_flag = True
-                temp_dlist[(leaf.name, parent.children[n].name)] = dis
-
-        if multi_flag:					# this is to deal with polytomies
-            neighbours.update(temp_dlist)
+                neighbours.append([leaf, parent.children[n], dis])
 
     return neighbours
 
 
-def _get_prune_leaf(neighbours, t):
+def _get_prune_leaf(neighbours):
     '''parse the list with all neighbor pairs and distances, find the closest
     pair and select the leaf.'''
-    min_val = min(neighbours.values())
-    d_min = {}
+    neighbours.sort(key=operator.itemgetter(2))
 
-    for k, v in neighbours.iteritems():
-        if v == min_val:
-            d_min.update({k: v})
+    pair = neighbours[0]
 
-    pair = random.choice(list(d_min))
-
-    leaf1 = t.search_nodes(name=pair[0])[0]
-    leaf2 = t.search_nodes(name=pair[1])[0]
-
-    if leaf1.dist > leaf2.dist:
-        leaf_to_prune = leaf2.name
-        # leaf_to_keep = leaf1.name
-    else:
-        leaf_to_prune = leaf1.name
-        # leaf_to_keep = leaf2.name
-
-    # check if leaf is protected
-    # if is_protected
-        # leaf_to_prune = leaf_to_keep
-        # if both leaves of the pair are protected => delete the pair from
-        # neighbours and make another cycle
-        # del neighbours[pair_unsplit]
-
-    return leaf_to_prune
+    return pair[1] if pair[0].dist > pair[1].dist else pair[0]
 
 
-def _prune_tree(leaf_to_prune, tree):
+def _prune_tree(prune_leaf):
     '''Prune leaf from tree.'''
-    node = tree.search_nodes(name=leaf_to_prune)[0]
-    parent = node.up
+    parent = prune_leaf.up
 
-    if len(parent.get_children()) == 2:
-        if parent.children[0] != node:
-            parent.children[0].dist = parent.children[0].dist + parent.dist
-        elif parent.children[1] != node:
-            parent.children[1].dist = parent.children[1].dist + parent.dist
+    for child in parent.get_children():
+        if child != prune_leaf:
+            child.dist += parent.dist
 
-    node.detach()
+    prune_leaf.detach()
 
-    if len(parent.get_children()) == 1:
-        # after pruning the remaining branch will be like this:
-        # ---/---leaf_name. I delete useless node keeping the b length
-        parent.delete()
+    # after pruning the remaining branch will be like this:
+    # ---/---leaf_name.
+    # delete useless node keeping the b length
+    parent.delete()
 
 
 def main(args):
