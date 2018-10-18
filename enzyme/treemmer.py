@@ -7,7 +7,6 @@ To view a copy of this license, visit <http://opensource.org/licenses/MIT/>.
 
 @author:  neilswainston
 '''
-from itertools import combinations
 import sys
 
 from ete3 import Tree
@@ -22,26 +21,20 @@ def prune(tree, num_nodes, common_ancestors=False, keep=None):
     # Get subtree, based on common ancestry:
     sub_tree = _get_subtree(tree, common_ancestors, keep)
 
-    # Filter leaves to only consider those "deleteable":
-    leaves = [leaf for leaf in sub_tree.get_leaves() if leaf.name not in keep]
-
     # Form distance matrix:
-    dists = pd.DataFrame(index=leaves, columns=leaves)
-
-    for pair in combinations(leaves, r=2):
-        dists[pair[0]][pair[1]] = pair[0].get_distance(pair[1])
+    dists = _get_dists(sub_tree.get_leaves(), keep)
 
     # Iterate through distance matrix, deleting most redundant leaf:
     while len(sub_tree) > max(1, num_nodes):
         # Find most redundant leaf and delete:
-        _remove_leaf(dists)
+        _remove_leaf(dists, keep)
 
     return sub_tree
 
 
 def _get_subtree(tree, common_ancestors, keep):
     '''Get subtree.'''
-    if common_ancestors:
+    if common_ancestors and keep and len(keep) > 1:
         ancestors = list(keep)
 
         while len(ancestors) > 1:
@@ -53,14 +46,39 @@ def _get_subtree(tree, common_ancestors, keep):
     return tree
 
 
-def _remove_leaf(dists):
+def _get_dists(leaves, keep):
+    '''Get distance matrix.'''
+    dists = pd.DataFrame(index=leaves, columns=leaves)
+
+    for leaf in leaves:
+        _updated_dists(leaf, dists, keep)
+
+    return dists
+
+
+def _updated_dists(leaf, dists, keep):
+    '''Update distance.'''
+    for child in leaf.up.get_children():
+        if child != leaf and child.is_leaf():
+            # Order nodes by in keep, dist then name:
+            nodes = sorted([leaf, child],
+                           key=lambda node: (node.name in keep,
+                                             node.dist,
+                                             node.name))
+
+            dists[nodes[0]][nodes[1]] = \
+                float('inf') if all(node.name in keep for node in nodes) \
+                else nodes[0].get_distance(nodes[1])
+
+
+def _remove_leaf(dists, keep):
     '''Find most redundant leaf and delete.'''
-    leaf1 = dists.min(axis=0).idxmin()
-    leaf2 = dists.min(axis=1).idxmin()
-    prune_leaf = leaf2 if leaf1.dist > leaf2.dist else leaf1
+    prune_leaf = dists.min(axis=0).idxmin()
+    keep_leaf = dists.min(axis=1).idxmin()
     _prune_tree(prune_leaf)
 
     # Update distance matrix:
+    _updated_dists(keep_leaf, dists, keep)
     dists.drop(prune_leaf, axis=0, inplace=True)
     dists.drop(prune_leaf, axis=1, inplace=True)
 
