@@ -7,16 +7,32 @@ To view a copy of this license, visit <http://opensource.org/licenses/MIT/>.
 
 @author:  neilswainston
 '''
+# pylint: disable=invalid-name
 import sys
 
 from ete3 import Tree
+from synbiochem.utils import seq_utils
+
 import pandas as pd
 
 
-def prune(tree, num_nodes, common_ancestors=False, keep=None):
+def get_homologues(id_seqs, num_nodes, common_ancestors=False, keep=None,
+                   frmt=1):
+    '''Get homologues.'''
+    clustal_file = 'clustal.fasta'
+    guidetree_file = 'tree.dnd'
+    seq_utils.do_clustal(id_seqs, result_file=clustal_file,
+                         guidetree_file=guidetree_file)
+
+    return prune(guidetree_file, num_nodes, common_ancestors, keep, frmt)
+
+
+def prune(filename, num_nodes, common_ancestors=False, keep=None, frmt=1):
     '''Prune tree to representative number of nodes.'''
     if keep is None:
         keep = []
+
+    tree = Tree(filename, format=frmt)
 
     # Get subtree, based on common ancestry:
     sub_tree = _get_subtree(tree, common_ancestors, keep)
@@ -97,9 +113,8 @@ def _prune_tree(leaf):
 
 def main(args):
     '''main method.'''
-    tree = Tree(args[0], format=1)
-    sub_tree = prune(tree, int(args[1]), args[2] != 'False', args[3:])
-    print sub_tree
+    id_seqs = seq_utils.read_fasta(args[0])
+    print get_homologues(id_seqs, int(args[1]), args[2] != 'False', args[3:])
 
 
 if __name__ == '__main__':
