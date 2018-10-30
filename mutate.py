@@ -11,26 +11,53 @@ import sys
 from synbiochem.utils import ice_utils
 
 
-def duplicate(url, username, password, ice_id, mutations):
-    '''duplicate.'''
-    ice_client = ice_utils.ICEClient(url, username, password)
-    ice_entry = ice_client.get_ice_entry(ice_id).copy()
-    dna = ice_entry.get_dna()
-    cds = [feature for feature in dna['features']
-           if feature['typ'] == 'http://purl.obolibrary.org/obo/SO_0000316']
+class Mutater(object):
+    '''Class to represent a mutater.'''
 
-    print dna['seq']
+    def __init__(self, url, username, password):
+        self.__ice_client = ice_utils.ICEClient(url, username, password)
 
-    for aa_pos, mutation in mutations.iteritems():
-        dna_pos = cds[0]['start'] - 1 + (aa_pos * 3)
-        dna['seq'] = dna['seq'][:dna_pos] + mutation + dna['seq'][dna_pos + 3:]
+    def mutate(self, ice_id, mutations):
+        '''mutate.'''
+        ice_entry = self.__ice_client.get_ice_entry(ice_id).copy()
+        dna = ice_entry.get_dna()
+        cds = [feat for feat in dna['features']
+               if feat['typ'] == 'http://purl.obolibrary.org/obo/SO_0000316']
 
-    print dna['seq']
+        print dna['seq']
+
+        # Mutate:
+        for aa_pos, mutation in mutations.iteritems():
+            dna_pos = cds[0]['start'] - 1 + (aa_pos * 3)
+            dna['seq'] = dna['seq'][:dna_pos] + \
+                mutation + dna['seq'][dna_pos + 3:]
+
+        print dna['seq']
+
+        # Update names:
+        mut_seq = ' (' + \
+            ', '.join([':'.join([str(pos + 1), mut])
+                       for pos, mut in mutations.iteritems()]) + \
+            ')'
+
+        metadata = ice_entry.get_metadata()
+        metadata['name'] += mut_seq
+        metadata['shortDescription'] += mut_seq
+        dna['name'] += mut_seq
+        dna['desc'] += mut_seq
+
+        return ice_entry
+
+    def save(self, ice_entry):
+        '''save.'''
+        self.__ice_client.set_ice_entry(ice_entry)
 
 
 def main(args):
     '''main.'''
-    duplicate(args[0], args[1], args[2], args[3], {0: 'DBK', 1: 'NTN'})
+    mutater = Mutater(args[0], args[1], args[2])
+    ice_entry = mutater.mutate(args[3], {0: 'DBK', 1: 'NTN'})
+    mutater.save(ice_entry)
 
 
 if __name__ == '__main__':
