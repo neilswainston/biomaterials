@@ -13,12 +13,12 @@ from xml.dom.minidom import parse
 from synbiochem.utils.seq_utils import write_fasta
 
 
-def main(args):
-    '''main method.'''
-    with open(args[0]) as fle:
+def parse_blast(ids_filename, blast_filename, out_filename='ac_seqs.fasta'):
+    '''Parse blast XML.'''
+    with open(ids_filename) as fle:
         acs = [line.split('|')[1] for line in fle]
 
-    dom = parse(args[1])
+    dom = parse(blast_filename)
 
     id_seqs = {hit.attributes['ac'].value:
                hit.getElementsByTagName('matchSeq')[
@@ -26,7 +26,12 @@ def main(args):
         for hit in dom.getElementsByTagName('hit')
         if hit.attributes['ac'].value in acs}
 
-    write_fasta(id_seqs, 'ac_seqs.fasta')
+    write_fasta(id_seqs, out_filename)
+
+
+def main(args):
+    '''main method.'''
+    parse(*args)
 
 
 if __name__ == '__main__':
