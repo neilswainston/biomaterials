@@ -25,9 +25,9 @@ def get_positions(id_seqs, ref_seq_id, target_seq_id, positions):
     _, trgt_aln_seq = _get_pos_map(trgt_seq)
 
     return [[pos,
-             ref_seq[ref_seq_aln[pos]],
-             trgt_aln_seq[ref_seq_aln[pos]],
-             trgt_seq[ref_seq_aln[pos]]]
+             ref_seq[ref_seq_aln[pos - 1]],
+             trgt_aln_seq[ref_seq_aln[pos - 1]],
+             trgt_seq[ref_seq_aln[pos - 1]]]
             for pos in positions]
 
 
