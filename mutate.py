@@ -19,12 +19,12 @@ class Mutater(object):
 
     def mutate(self, ice_id, mutations):
         '''mutate.'''
+
+        # Get ICE entry:
         ice_entry = self.__ice_client.get_ice_entry(ice_id).copy()
         dna = ice_entry.get_dna()
         cds = [feat for feat in dna['features']
                if feat['typ'] == 'http://purl.obolibrary.org/obo/SO_0000316']
-
-        print dna['seq']
 
         # Mutate:
         for aa_pos, mutation in mutations.iteritems():
@@ -32,19 +32,8 @@ class Mutater(object):
             dna['seq'] = dna['seq'][:dna_pos] + \
                 mutation + dna['seq'][dna_pos + 3:]
 
-        print dna['seq']
-
         # Update names:
-        mut_seq = ' (' + \
-            ', '.join([':'.join([str(pos + 1), mut])
-                       for pos, mut in mutations.iteritems()]) + \
-            ')'
-
-        metadata = ice_entry.get_metadata()
-        metadata['name'] += mut_seq
-        metadata['shortDescription'] += mut_seq
-        dna['name'] += mut_seq
-        dna['desc'] += mut_seq
+        _update_names(mutations, ice_entry, dna)
 
         return ice_entry
 
@@ -53,11 +42,27 @@ class Mutater(object):
         self.__ice_client.set_ice_entry(ice_entry)
 
 
+def _update_names(mutations, ice_entry, dna):
+    '''Update names.'''
+    mut_seq = ' (' + \
+        ', '.join([':'.join([str(pos + 1), mut])
+                   for pos, mut in mutations.iteritems()]) + \
+        ')'
+
+    metadata = ice_entry.get_metadata()
+    metadata['name'] += mut_seq
+    metadata['shortDescription'] += mut_seq
+    dna['name'] += mut_seq
+    dna['desc'] += mut_seq
+
+
 def main(args):
     '''main.'''
     mutater = Mutater(args[0], args[1], args[2])
-    ice_entry = mutater.mutate(args[3], {0: 'DBK', 1: 'NTN'})
+    ice_entry = mutater.mutate(args[3],
+                               {int(pos): args[4] for pos in args[5:]})
     mutater.save(ice_entry)
+    print ice_entry
 
 
 if __name__ == '__main__':
