@@ -1,5 +1,5 @@
 '''
-synbiochem (c) University of Manchester 2018
+synbiochem (c) University of Manchester 2019
 
 synbiochem is licensed under the MIT License.
 
@@ -18,6 +18,7 @@ import seaborn as sns
 def plot(filename):
     '''Plot.'''
     sns.set(style='ticks', palette='pastel')
+    sns.set_style('whitegrid', {'grid.linestyle': '--'})
 
     xls = pd.ExcelFile(filename)
 
@@ -43,25 +44,13 @@ def _get_df(xls, sheet_name):
 
 def _boxplot(df):
     '''Box plot.'''
-    fig, axs = plt.subplots(ncols=len(df['target'].unique()),
-                            sharey=True)
+    g = sns.catplot(data=df, x='id', y='target conc',
+                    hue='substrate concentration', col='target',
+                    sharex=False, kind='box')
 
-    for idx, (substrate, group_df) in enumerate(df.groupby('target')):
-        ax = axs[idx]
-        ax.grid(True)
-        ax.set_title(substrate)
+    g.set_titles('{col_name}')
 
-        sns.boxplot(x='id', y='target conc',
-                    data=group_df,
-                    hue='substrate concentration',
-                    ax=ax)
-
-    lgd = fig.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0.0,
-                     title='substrate conc.')
-
-    plt.savefig('%s.png' % df.name,
-                bbox_extra_artists=(lgd,),
-                bbox_inches='tight')
+    plt.savefig('%s.png' % df.name)
 
 
 def main(args):
