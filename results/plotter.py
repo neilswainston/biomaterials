@@ -29,11 +29,11 @@ def plot(filename, out_dir='out', groupby=None):
         if df is not None:
             if groupby:
                 for group_id, group_df in df.groupby(groupby):
-                    group_df.name = df.name + '__' + group_id
+                    group_df.name = df.name + '__' + '_'.join(group_id)
 
                     _boxplot(group_df,
                              os.path.join(os.path.join(out_dir, name),
-                                          group_id))
+                                          '_'.join(group_id)))
             else:
                 _boxplot(df, os.path.join(out_dir, name))
 
@@ -94,7 +94,7 @@ def _boxplot(df, out_dir):
 def main(args):
     '''main method.'''
     for filename in args:
-        plot(filename, groupby='target')
+        plot(filename, groupby=['substrate', 'target'])
 
 
 if __name__ == '__main__':
