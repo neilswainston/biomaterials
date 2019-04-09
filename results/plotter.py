@@ -29,7 +29,7 @@ def plot(filename, out_dir='out', groupby=None):
         if df is not None:
             if groupby:
                 for group_id, group_df in df.groupby(groupby):
-                    group_df.name = df.name + '__' + '_'.join(group_id)
+                    group_df.name = ' to '.join(group_id) + ' enzyme screen'
 
                     _boxplot(group_df,
                              os.path.join(os.path.join(out_dir, name),
@@ -46,6 +46,7 @@ def _get_df(xls, sheet_name):
         return None
 
     xls_df.dropna(how='all', inplace=True)
+    xls_df['substrate'].fillna('None', inplace=True)
     xls_df['plasmid id'].fillna('None', inplace=True)
 
     rep_cols = [col for col in xls_df.columns if col.startswith('Rep')]
@@ -67,7 +68,8 @@ def _get_df(xls, sheet_name):
 def _get_sample_desc(row):
     '''Get sample description.'''
     return ('I' if row['induced'] else 'NI') + \
-        ', %0.1f mM' % row['substrate concentration']
+        (', %0.1f mM' % row['substrate concentration']) + \
+        (', %0.1f hr' % row['incubation time'])
 
 
 def _boxplot(df, out_dir):
@@ -78,11 +80,12 @@ def _boxplot(df, out_dir):
     fig, ax = plt.subplots()
     fig.set_size_inches(0.6 * num_cols + 2.0, 5.0)
 
-    g = sns.catplot(data=df, x='plasmid id', y='target conc',
-                    hue='Sample description', col='target',
-                    kind='box', palette='pastel', ax=ax)
+    g = sns.boxplot(data=df, x='plasmid id', y='target conc',
+                    hue='Sample description',
+                    palette='pastel', ax=ax)
 
-    g.set_titles('{col_name}')
+    g.set_title(df.name)
+    ax.set(xlabel='Plasmid(s)', ylabel='Titre (mg/l)')
 
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
