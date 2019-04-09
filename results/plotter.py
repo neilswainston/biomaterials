@@ -30,23 +30,32 @@ def plot(filename, out_dir='out'):
 
 def _get_df(xls, sheet_name):
     '''Get df.'''
-    df = pd.read_excel(xls, sheet_name)
-    rep_cols = [col for col in df.columns if col.startswith('Rep')]
+    xls_df = pd.read_excel(xls, sheet_name)
+    xls_df.dropna(how='all')
+
+    rep_cols = [col for col in xls_df.columns if col.startswith('Rep')]
     reps_df = pd.DataFrame([[idx, val]
-                            for idx, vals in df[rep_cols].iterrows()
+                            for idx, vals in xls_df[rep_cols].iterrows()
                             for val in vals.values],
                            columns=['idx', 'target conc']).set_index('idx')
 
-    reformat_df = df.drop(rep_cols, axis=1).join(reps_df)
-    reformat_df.name = sheet_name
+    df = xls_df.drop(rep_cols, axis=1).join(reps_df)
+    df.name = sheet_name
+    df['Sample description'] = df.apply(_get_sample_desc, axis=1)
 
-    return reformat_df
+    return df
+
+
+def _get_sample_desc(row):
+    '''Get sample description.'''
+    return ('I' if row['induced'] else 'NI') + \
+        ', %0.1fmM' % row['substrate concentration']
 
 
 def _boxplot(df, out_dir):
     '''Box plot.'''
-    g = sns.catplot(data=df, x='id', y='target conc',
-                    hue='substrate concentration', col='target',
+    g = sns.catplot(data=df, x='plasmid id', y='target conc',
+                    hue='Sample description', col='target',
                     kind='box', palette='pastel')
 
     g.set_titles('{col_name}')
