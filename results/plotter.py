@@ -18,7 +18,7 @@ import seaborn as sns
 sns.set_style('whitegrid', {'grid.linestyle': '--'})
 
 
-def plot(filename, out_dir='out'):
+def plot(filename, out_dir='out', groupby=None):
     '''Plot.'''
     xls = pd.ExcelFile(filename)
     name, _ = os.path.splitext(os.path.basename(filename))
@@ -27,7 +27,15 @@ def plot(filename, out_dir='out'):
         df = _get_df(xls, sheet_name)
 
         if df is not None:
-            _boxplot(df, os.path.join(out_dir, name))
+            if groupby:
+                for group_id, group_df in df.groupby(groupby):
+                    group_df.name = df.name + '__' + group_id
+
+                    _boxplot(group_df,
+                             os.path.join(os.path.join(out_dir, name),
+                                          group_id))
+            else:
+                _boxplot(df, os.path.join(out_dir, name))
 
 
 def _get_df(xls, sheet_name):
@@ -59,7 +67,7 @@ def _get_df(xls, sheet_name):
 def _get_sample_desc(row):
     '''Get sample description.'''
     return ('I' if row['induced'] else 'NI') + \
-        ', %0.1fmM' % row['substrate concentration']
+        ', %0.1f mM' % row['substrate concentration']
 
 
 def _boxplot(df, out_dir):
@@ -74,12 +82,13 @@ def _boxplot(df, out_dir):
         os.makedirs(out_dir)
 
     plt.savefig(os.path.join(out_dir, '%s.png' % df.name))
+    plt.close()
 
 
 def main(args):
     '''main method.'''
     for filename in args:
-        plot(filename)
+        plot(filename, groupby='target')
 
 
 if __name__ == '__main__':
