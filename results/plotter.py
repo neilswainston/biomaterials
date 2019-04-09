@@ -25,23 +25,33 @@ def plot(filename, out_dir='out'):
 
     for sheet_name in xls.sheet_names:
         df = _get_df(xls, sheet_name)
-        _boxplot(df, os.path.join(out_dir, name))
+
+        if df is not None:
+            _boxplot(df, os.path.join(out_dir, name))
 
 
 def _get_df(xls, sheet_name):
     '''Get df.'''
     xls_df = pd.read_excel(xls, sheet_name)
-    xls_df.dropna(how='all')
+
+    if xls_df.empty:
+        return None
+
+    xls_df.dropna(how='all', inplace=True)
+    xls_df['plasmid id'].fillna('None', inplace=True)
 
     rep_cols = [col for col in xls_df.columns if col.startswith('Rep')]
     reps_df = pd.DataFrame([[idx, val]
                             for idx, vals in xls_df[rep_cols].iterrows()
-                            for val in vals.values],
+                            for val in vals.values
+                            if pd.notnull(val)],
                            columns=['idx', 'target conc']).set_index('idx')
 
     df = xls_df.drop(rep_cols, axis=1).join(reps_df)
-    df.name = sheet_name
     df['Sample description'] = df.apply(_get_sample_desc, axis=1)
+    df.name = sheet_name
+
+    df.to_csv('out.csv')
 
     return df
 
