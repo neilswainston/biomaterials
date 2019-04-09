@@ -40,7 +40,7 @@ def plot(filename, out_dir='out', groupby=None):
 
 def _get_df(xls, sheet_name):
     '''Get df.'''
-    xls_df = pd.read_excel(xls, sheet_name)
+    xls_df = pd.read_excel(xls, sheet_name, dtype={'plasmid id': object})
 
     if xls_df.empty:
         return None
@@ -72,17 +72,23 @@ def _get_sample_desc(row):
 
 def _boxplot(df, out_dir):
     '''Box plot.'''
+    num_cols = len(df['plasmid id'].unique()) * \
+        len(df['Sample description'].unique())
+
+    fig, ax = plt.subplots()
+    fig.set_size_inches(0.6 * num_cols + 2.0, 5.0)
+
     g = sns.catplot(data=df, x='plasmid id', y='target conc',
                     hue='Sample description', col='target',
-                    kind='box', palette='pastel')
+                    kind='box', palette='pastel', ax=ax)
 
     g.set_titles('{col_name}')
 
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
 
-    plt.savefig(os.path.join(out_dir, '%s.png' % df.name))
-    plt.close()
+    fig.savefig(os.path.join(out_dir, '%s.png' % df.name))
+    plt.close('all')
 
 
 def main(args):
