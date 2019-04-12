@@ -8,12 +8,14 @@ To view a copy of this license, visit <http://opensource.org/licenses/MIT/>.
 @author:  neilswainston
 '''
 # pylint: disable=invalid-name
+import glob
 import os
 import sys
 
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
+
 
 sns.set_style('whitegrid', {'grid.linestyle': '--'})
 
@@ -60,8 +62,6 @@ def _get_df(xls, sheet_name):
     df['Sample description'] = df.apply(_get_sample_desc, axis=1)
     df.name = sheet_name
 
-    df.to_csv('out.csv')
-
     return df
 
 
@@ -96,7 +96,7 @@ def _boxplot(df, out_dir):
 
 def main(args):
     '''main method.'''
-    for filename in args:
+    for filename in glob.glob(os.path.join(args[0], '*.xlsx')):
         plot(filename, groupby=['substrate', 'target'])
 
 
