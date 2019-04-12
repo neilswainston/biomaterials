@@ -23,10 +23,12 @@ sns.set_style('whitegrid', {'grid.linestyle': '--'})
 def plot(filename, out_dir='out', groupby=None):
     '''Plot.'''
     xls = pd.ExcelFile(filename)
-    name, _ = os.path.splitext(os.path.basename(filename))
+    project_name, _ = os.path.splitext(os.path.basename(filename))
 
     for sheet_name in xls.sheet_names:
         df = _get_df(xls, sheet_name)
+        project_dir = os.path.join(out_dir, project_name)
+        sheet_dir = os.path.join(project_dir, sheet_name)
 
         if df is not None:
             if groupby:
@@ -34,10 +36,9 @@ def plot(filename, out_dir='out', groupby=None):
                     group_df.name = ' to '.join(group_id) + ' enzyme screen'
 
                     _boxplot(group_df,
-                             os.path.join(os.path.join(out_dir, name),
-                                          '_'.join(group_id)))
+                             os.path.join(sheet_dir, '_'.join(group_id)))
             else:
-                _boxplot(df, os.path.join(out_dir, name))
+                _boxplot(df, sheet_dir)
 
 
 def _get_df(xls, sheet_name):
