@@ -20,7 +20,7 @@ import seaborn as sns
 sns.set_style('whitegrid', {'grid.linestyle': '--'})
 
 
-def plot(filename, out_dir='out', groupby=None):
+def plot(filename, out_dir='out'):
     '''Plot.'''
     xls = pd.ExcelFile(filename)
     project_name, _ = os.path.splitext(os.path.basename(filename))
@@ -31,14 +31,22 @@ def plot(filename, out_dir='out', groupby=None):
         sheet_dir = os.path.join(project_dir, sheet_name)
 
         if df is not None:
-            if groupby:
-                for group_id, group_df in df.groupby(groupby):
+            if sheet_name.startswith('enzyme'):
+                df['Sample description'] = \
+                    df.apply(_get_enzyme_screen_desc, axis=1)
+
+                for group_id, group_df in df.groupby(['substrate', 'target']):
                     group_df.name = ' to '.join(group_id) + ' enzyme screen'
 
                     _boxplot(group_df,
                              os.path.join(sheet_dir, '_'.join(group_id)))
             else:
-                _boxplot(df, sheet_dir)
+                # Assume pathway plot:
+                for group_id, group_df in df.groupby(['substrate']):
+                    group_df.name = group_id + ' pathway screen'
+
+                    _barplot(group_df,
+                             os.path.join(sheet_dir, group_id))
 
 
 def _get_df(xls, sheet_name):
@@ -60,14 +68,13 @@ def _get_df(xls, sheet_name):
                            columns=['idx', 'target conc']).set_index('idx')
 
     df = xls_df.drop(rep_cols, axis=1).join(reps_df)
-    df['Sample description'] = df.apply(_get_sample_desc, axis=1)
     df.name = sheet_name
 
     return df
 
 
-def _get_sample_desc(row):
-    '''Get sample description.'''
+def _get_enzyme_screen_desc(row):
+    '''Get enzyme screen description.'''
     return ('I' if row['induced'] else 'NI') + \
         (', %0.1f mM' % row['substrate concentration']) + \
         (', %0.1f hr' % row['incubation time'])
@@ -78,8 +85,7 @@ def _boxplot(df, out_dir):
     num_cols = len(df['plasmid id'].unique()) * \
         len(df['Sample description'].unique())
 
-    fig, ax = plt.subplots()
-    fig.set_size_inches(0.6 * num_cols + 2.0, 5.0)
+    fig, ax = _get_fig_ax(num_cols)
 
     g = sns.boxplot(data=df, x='plasmid id', y='target conc',
                     hue='Sample description',
@@ -95,10 +101,42 @@ def _boxplot(df, out_dir):
     plt.close('all')
 
 
+def _barplot(df, out_dir):
+    '''Bar plot.'''
+    name = df.name
+    df = df.sort_values('Analyte order')
+    df.name = name
+
+    num_cols = len(df['plasmid id'].unique())
+    fig, ax = _get_fig_ax(num_cols)
+
+    g = sns.barplot(data=df, x='plasmid id', y='target conc',
+                    hue='target',
+                    palette='pastel', ax=ax)
+
+    g.set_title(df.name)
+    ax.set(xlabel='Plasmid(s)', ylabel='Titre (mg/l)')
+
+    if not os.path.exists(out_dir):
+        os.makedirs(out_dir)
+
+    fig.savefig(os.path.join(out_dir, '%s.png' % df.name))
+    plt.close('all')
+
+
+def _get_fig_ax(num_cols):
+    '''Get fig and ax based on number of columns.'''
+    fig, ax = plt.subplots()
+    fig.set_size_inches(0.6 * num_cols + 2.0, 5.0)
+
+    return fig, ax
+
+
 def main(args):
     '''main method.'''
     for filename in glob.glob(os.path.join(args[0], '*.xlsx')):
-        plot(filename, groupby=['substrate', 'target'])
+        if '~' not in filename:
+            plot(filename)
 
 
 if __name__ == '__main__':
