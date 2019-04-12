@@ -41,8 +41,11 @@ def plot(filename, out_dir='out'):
                     _boxplot(group_df,
                              os.path.join(sheet_dir, '_'.join(group_id)))
             else:
-                # Assume pathway plot:
+                df['Sample description'] = \
+                    df.apply(_get_pathway_screen_desc, axis=1)
+
                 for group_id, group_df in df.groupby(['substrate']):
+                    group_df = group_df.sort_values('Analyte order')
                     group_df.name = group_id + ' pathway screen'
 
                     _barplot(group_df,
@@ -51,7 +54,8 @@ def plot(filename, out_dir='out'):
 
 def _get_df(xls, sheet_name):
     '''Get df.'''
-    xls_df = pd.read_excel(xls, sheet_name, dtype={'plasmid id': object})
+    xls_df = pd.read_excel(xls, sheet_name, dtype={'plasmid id': object,
+                                                   'host id': object})
 
     if xls_df.empty:
         return None
@@ -80,6 +84,11 @@ def _get_enzyme_screen_desc(row):
         (', %0.1f hr' % row['incubation time'])
 
 
+def _get_pathway_screen_desc(row):
+    '''Get pathway screen description.'''
+    return '%s, host: %s' % (row['target'], row['host id'])
+
+
 def _boxplot(df, out_dir):
     '''Box plot.'''
     num_cols = len(df['plasmid id'].unique()) * \
@@ -103,15 +112,13 @@ def _boxplot(df, out_dir):
 
 def _barplot(df, out_dir):
     '''Bar plot.'''
-    name = df.name
-    df = df.sort_values('Analyte order')
-    df.name = name
+    num_cols = len(df['plasmid id'].unique()) * \
+        len(df['Sample description'].unique())
 
-    num_cols = len(df['plasmid id'].unique())
     fig, ax = _get_fig_ax(num_cols)
 
     g = sns.barplot(data=df, x='plasmid id', y='target conc',
-                    hue='target',
+                    hue='Sample description',
                     palette='pastel', ax=ax)
 
     g.set_title(df.name)
