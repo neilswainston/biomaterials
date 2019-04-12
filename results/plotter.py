@@ -27,6 +27,7 @@ def plot(filename, out_dir='out'):
 
     for sheet_name in xls.sheet_names:
         df = _get_df(xls, sheet_name)
+
         project_dir = os.path.join(out_dir, project_name)
         sheet_dir = os.path.join(project_dir, sheet_name)
 
@@ -38,8 +39,8 @@ def plot(filename, out_dir='out'):
                 for group_id, group_df in df.groupby(['substrate', 'target']):
                     group_df.name = ' to '.join(group_id) + ' enzyme screen'
 
-                    _boxplot(group_df,
-                             os.path.join(sheet_dir, '_'.join(group_id)))
+                    _plot(group_df, sns.boxplot,
+                          os.path.join(sheet_dir, '_'.join(group_id)))
             else:
                 df['Sample description'] = \
                     df.apply(_get_pathway_screen_desc, axis=1)
@@ -48,8 +49,8 @@ def plot(filename, out_dir='out'):
                     group_df = group_df.sort_values('Analyte order')
                     group_df.name = group_id + ' pathway screen'
 
-                    _barplot(group_df,
-                             os.path.join(sheet_dir, group_id))
+                    _plot(group_df, sns.barplot,
+                          os.path.join(sheet_dir, group_id))
 
 
 def _get_df(xls, sheet_name):
@@ -89,54 +90,26 @@ def _get_pathway_screen_desc(row):
     return '%s, host: %s' % (row['target'], row['host id'])
 
 
-def _boxplot(df, out_dir):
-    '''Box plot.'''
+def _plot(df, plot_func, out_dir):
+    '''Plot.'''
     num_cols = len(df['plasmid id'].unique()) * \
         len(df['Sample description'].unique())
 
-    fig, ax = _get_fig_ax(num_cols)
-
-    g = sns.boxplot(data=df, x='plasmid id', y='target conc',
-                    hue='Sample description',
-                    palette='pastel', ax=ax)
-
-    g.set_title(df.name)
-    ax.set(xlabel='Plasmid(s)', ylabel='Titre (mg/l)')
-
-    if not os.path.exists(out_dir):
-        os.makedirs(out_dir)
-
-    fig.savefig(os.path.join(out_dir, '%s.png' % df.name))
-    plt.close('all')
-
-
-def _barplot(df, out_dir):
-    '''Bar plot.'''
-    num_cols = len(df['plasmid id'].unique()) * \
-        len(df['Sample description'].unique())
-
-    fig, ax = _get_fig_ax(num_cols)
-
-    g = sns.barplot(data=df, x='plasmid id', y='target conc',
-                    hue='Sample description',
-                    palette='pastel', ax=ax)
-
-    g.set_title(df.name)
-    ax.set(xlabel='Plasmid(s)', ylabel='Titre (mg/l)')
-
-    if not os.path.exists(out_dir):
-        os.makedirs(out_dir)
-
-    fig.savefig(os.path.join(out_dir, '%s.png' % df.name))
-    plt.close('all')
-
-
-def _get_fig_ax(num_cols):
-    '''Get fig and ax based on number of columns.'''
     fig, ax = plt.subplots()
     fig.set_size_inches(0.6 * num_cols + 2.0, 5.0)
 
-    return fig, ax
+    g = plot_func(data=df, x='plasmid id', y='target conc',
+                  hue='Sample description',
+                  palette='pastel', ax=ax)
+
+    g.set_title(df.name)
+    ax.set(xlabel='Plasmid(s)', ylabel='Titre (mg/l)')
+
+    if not os.path.exists(out_dir):
+        os.makedirs(out_dir)
+
+    fig.savefig(os.path.join(out_dir, '%s.png' % df.name))
+    plt.close('all')
 
 
 def main(args):
