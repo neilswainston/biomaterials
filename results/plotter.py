@@ -20,13 +20,13 @@ import seaborn as sns
 sns.set_style('whitegrid', {'grid.linestyle': '--'})
 
 
-def plot(filename, out_dir='out'):
-    '''Plot.'''
+def plot(filename, out_dir='out', head=None):
+    '''Plot. head: (optional) label in first row'''
     xls = pd.ExcelFile(filename)
     project_name, _ = os.path.splitext(os.path.basename(filename))
 
     for sheet_name in xls.sheet_names:
-        df = _get_df(xls, sheet_name)
+        df = _get_df(xls, sheet_name, head=head)
 
         project_dir = os.path.join(out_dir, project_name)
         sheet_dir = os.path.join(project_dir, sheet_name)
@@ -46,18 +46,25 @@ def plot(filename, out_dir='out'):
                     df.apply(_get_pathway_screen_desc, axis=1)
 
                 for group_id, group_df in df.groupby(['substrate']):
-                    group_df = group_df.sort_values('Analyte order')
+                    group_df = group_df.sort_values('analyte order')
                     group_df.name = group_id + ' pathway screen'
 
                     _plot(group_df, sns.barplot,
                           os.path.join(sheet_dir, group_id))
 
 
-def _get_df(xls, sheet_name):
+def _get_df(xls, sheet_name, head=None):
     '''Get df.'''
     xls_df = pd.read_excel(xls, sheet_name, dtype={'plasmid id': object,
                                                    'host id': object})
-
+    if head is not None:
+        '''Search for the header row'''
+        for i in xls_df.index:
+            if xls_df.iloc[i,0] == head:
+                break
+        xls_df = pd.read_excel(xls, sheet_name, header=i+1,
+                               dtype={'plasmid id': object,
+                                      'host id': object})
     if xls_df.empty:
         return None
 
@@ -109,6 +116,7 @@ def _plot(df, plot_func, out_dir):
         os.makedirs(out_dir)
 
     fig.savefig(os.path.join(out_dir, '%s.png' % df.name))
+    fig.savefig(os.path.join(out_dir, '%s.svg' % df.name))
     plt.close('all')
 
 
@@ -116,7 +124,7 @@ def main(args):
     '''main method.'''
     for filename in glob.glob(os.path.join(args[0], '*.xlsx')):
         if '~' not in filename:
-            plot(filename)
+            plot(filename, head='sample id')
 
 
 if __name__ == '__main__':
